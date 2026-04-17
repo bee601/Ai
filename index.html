@@ -1,15 +1,13 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Groq AI Chat</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;800&display=swap" rel="stylesheet" />
-  <!-- Highlight.js für Code Syntax Highlighting -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <!-- Marked.js für Markdown Parsing -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -81,6 +79,17 @@
       display: flex;
       align-items: center;
       gap: 1rem;
+    }
+
+    .header-controls select, .header-controls button {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      outline: none;
     }
 
     .model-badge {
@@ -190,6 +199,7 @@
       font-size: 0.95rem;
       max-width: 100%;
       overflow-x: auto;
+      position: relative;
     }
 
     .message.user .bubble {
@@ -209,11 +219,12 @@
     .bubble p:last-child { margin-bottom: 0; }
     .bubble pre {
       background: #0d0d12;
-      padding: 1rem;
+      padding: 2.5rem 1rem 1rem 1rem; /* Extra top padding for the copy button */
       border-radius: 8px;
       border: 1px solid var(--border);
       margin: 1rem 0;
       overflow-x: auto;
+      position: relative;
     }
     .bubble code {
       font-family: var(--font-mono);
@@ -227,6 +238,26 @@
     .bubble ul, .bubble ol {
       margin-left: 1.5rem;
       margin-bottom: 0.75rem;
+    }
+
+    /* Copy Button for code blocks */
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .copy-btn:hover {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
     }
 
     /* typing indicator */
@@ -324,6 +355,22 @@
       margin: 0 auto;
     }
 
+    .icon-btn {
+      width: 52px; height: 52px;
+      border-radius: 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+      font-size: 1.2rem;
+    }
+    .icon-btn:hover { background: var(--border); }
+
     #userInput {
       flex: 1;
       background: var(--surface2);
@@ -344,21 +391,12 @@
     #userInput::placeholder { color: var(--muted); }
 
     #sendBtn {
-      width: 52px; height: 52px;
-      border-radius: 12px;
       background: var(--accent);
       border: none;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      flex-shrink: 0;
     }
-    #sendBtn:hover { background: #9385f9; transform: scale(1.05); }
+    #sendBtn:hover { background: #9385f9; transform: scale(1.05); border-color: transparent;}
     #sendBtn:active { transform: scale(0.96); }
     #sendBtn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-
     #sendBtn svg { fill: white; width: 20px; height: 20px; }
 
     .char-hint {
@@ -392,17 +430,24 @@
 <header>
   <div class="logo">
     <div class="logo-dot"></div>
-    GroqChat
+    <span id="ui-title">GroqChat</span>
   </div>
   <div class="header-right">
+    <div class="header-controls">
+      <select id="langSelect" onchange="switchLanguage()">
+        <option value="en">English</option>
+        <option value="de">Deutsch</option>
+      </select>
+      <button onclick="clearChat()" id="ui-clear">Clear Chat</button>
+    </div>
     <div class="model-badge" id="modelLabel">llama-3.3-70b-versatile</div>
     <div class="status"><div class="status-dot"></div>online</div>
   </div>
 </header>
 
 <div id="key-banner">
-  <label>API KEY</label>
-  <input type="password" id="apiKey" placeholder="gsk_..." />
+  <label id="ui-apikey">API KEY</label>
+  <input type="password" id="apiKey" placeholder="gsk_..." oninput="saveApiKey()" />
   <select id="modelSelect" onchange="updateModel()">
     <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
     <option value="llama-3.1-8b-instant">Llama 3.1 8B (fast)</option>
@@ -415,27 +460,62 @@
   <div id="empty-state">
     <div class="empty-icon">◈</div>
     <div class="empty-title">GroqChat</div>
-    <p class="empty-sub">Ultraschnelle KI-Antworten, powered by Groq. Gib deinen API-Key ein und starte.</p>
-    <div class="suggestions">
-      <div class="suggestion-chip" onclick="usePrompt('Erkläre Quantencomputer in einfachen Worten')">Quantencomputer erklären</div>
-      <div class="suggestion-chip" onclick="usePrompt('Schreib ein Python-Script für eine To-Do-App')">Python To-Do App</div>
-      <div class="suggestion-chip" onclick="usePrompt('Was sind die Top 5 KI-Trends 2025?')">KI-Trends 2025</div>
-      <div class="suggestion-chip" onclick="usePrompt('Erstelle einen kreativen Tweet über Technologie')">Tweet schreiben</div>
-    </div>
+    <p class="empty-sub" id="ui-emptysub">Enter your API key and start.</p>
+    <div class="suggestions" id="ui-suggestions">
+      </div>
   </div>
 </div>
 
 <div id="input-area">
   <div class="input-row">
-    <textarea id="userInput" placeholder="Nachricht eingeben..." rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-    <button id="sendBtn" onclick="sendMessage()" title="Senden">
+    <input type="file" id="fileInput" hidden onchange="handleFileUpload(event)" accept=".txt,.js,.py,.html,.css,.json,.md,.csv">
+    <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="Upload Text/Code File">
+      📁
+    </button>
+    <textarea id="userInput" placeholder="Type a message..." rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+    <button id="sendBtn" class="icon-btn" onclick="sendMessage()" title="Send">
       <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
     </button>
   </div>
-  <p class="char-hint">Enter senden · Shift+Enter neue Zeile</p>
+  <p class="char-hint" id="ui-hint">Enter to send · Shift+Enter for new line</p>
 </div>
 
 <script>
+  // Language configuration
+  const translations = {
+    en: {
+      placeholder: "Type a message...",
+      emptySub: "Ultra-fast AI answers, powered by Groq. Enter your API key and start.",
+      hint: "Enter to send · Shift+Enter for new line",
+      clearBtn: "Clear Chat",
+      sysPrompt: "You are a helpful, highly capable AI assistant. Please respond primarily in English. Ensure your answers are concise and formatting is clean.",
+      suggestions: [
+        { label: "Explain Quantum Computing", prompt: "Explain quantum computers in simple terms" },
+        { label: "Python To-Do App", prompt: "Write a Python script for a simple to-do app" },
+        { label: "Top AI Trends", prompt: "What are the top 5 AI trends for 2025?" },
+        { label: "Write a Tweet", prompt: "Create a creative tweet about technology" }
+      ]
+    },
+    de: {
+      placeholder: "Nachricht eingeben...",
+      emptySub: "Ultraschnelle KI-Antworten, powered by Groq. Gib deinen API-Key ein und starte.",
+      hint: "Enter senden · Shift+Enter neue Zeile",
+      clearBtn: "Chat löschen",
+      sysPrompt: "Du bist ein hilfreicher, hochleistungsfähiger KI-Assistent. Bitte antworte hauptsächlich auf Deutsch. Halte deine Antworten präzise und übersichtlich formatiert.",
+      suggestions: [
+        { label: "Quantencomputer erklären", prompt: "Erkläre Quantencomputer in einfachen Worten" },
+        { label: "Python To-Do App", prompt: "Schreib ein Python-Script für eine To-Do-App" },
+        { label: "KI-Trends 2025", prompt: "Was sind die Top 5 KI-Trends 2025?" },
+        { label: "Tweet schreiben", prompt: "Erstelle einen kreativen Tweet über Technologie" }
+      ]
+    }
+  };
+
+  let currentLang = 'en';
+  let history = [];
+  let isLoading = false;
+  let currentModel = 'llama-3.3-70b-versatile';
+
   // Configure Marked.js to use Highlight.js
   marked.setOptions({
     highlight: function(code, lang) {
@@ -445,9 +525,82 @@
     breaks: true
   });
 
-  let history = [];
-  let isLoading = false;
-  let currentModel = 'llama-3.3-70b-versatile';
+  // Load Data on Start
+  window.onload = () => {
+    // Load API Key
+    const savedKey = localStorage.getItem('groq_api_key');
+    if (savedKey) document.getElementById('apiKey').value = savedKey;
+
+    // Load Language preference
+    const savedLang = localStorage.getItem('groq_chat_lang');
+    if (savedLang && (savedLang === 'en' || savedLang === 'de')) {
+      document.getElementById('langSelect').value = savedLang;
+      currentLang = savedLang;
+    }
+    applyLanguage();
+
+    // Load Chat History
+    const savedHistory = localStorage.getItem('groq_chat_history');
+    if (savedHistory) {
+      const parsed = JSON.parse(savedHistory);
+      if (parsed.length > 0) {
+        history = parsed;
+        const empty = document.getElementById('empty-state');
+        if (empty) empty.style.display = 'none';
+
+        // Render existing history (skipping system prompts)
+        history.forEach(msg => {
+          if (msg.role !== 'system') {
+            appendMessage(msg.role === 'assistant' ? 'ai' : 'user', msg.content, true);
+          }
+        });
+      }
+    }
+  };
+
+  function saveApiKey() {
+    const key = document.getElementById('apiKey').value.trim();
+    localStorage.setItem('groq_api_key', key);
+  }
+
+  function saveChatHistory() {
+    localStorage.setItem('groq_chat_history', JSON.stringify(history));
+  }
+
+  function clearChat() {
+    if(confirm(currentLang === 'en' ? "Are you sure you want to clear the chat?" : "Möchten Sie den Chat wirklich löschen?")) {
+      history = [];
+      saveChatHistory();
+      document.getElementById('chat').innerHTML = '';
+      location.reload(); // Quick way to reset UI
+    }
+  }
+
+  function switchLanguage() {
+    currentLang = document.getElementById('langSelect').value;
+    localStorage.setItem('groq_chat_lang', currentLang);
+    applyLanguage();
+  }
+
+  function applyLanguage() {
+    const t = translations[currentLang];
+    document.getElementById('userInput').placeholder = t.placeholder;
+    document.getElementById('ui-emptysub').textContent = t.emptySub;
+    document.getElementById('ui-hint').textContent = t.hint;
+    document.getElementById('ui-clear').textContent = t.clearBtn;
+    
+    const suggContainer = document.getElementById('ui-suggestions');
+    if(suggContainer) {
+      suggContainer.innerHTML = '';
+      t.suggestions.forEach(s => {
+        const chip = document.createElement('div');
+        chip.className = 'suggestion-chip';
+        chip.textContent = s.label;
+        chip.onclick = () => usePrompt(s.prompt);
+        suggContainer.appendChild(chip);
+      });
+    }
+  }
 
   function updateModel() {
     currentModel = document.getElementById('modelSelect').value;
@@ -473,9 +626,59 @@
     input.focus();
   }
 
-  function appendMessage(role, content) {
+  // Handle File Upload and read text
+  function handleFileUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target.result;
+      const input = document.getElementById('userInput');
+      
+      const fileLabel = currentLang === 'en' ? 'File Content' : 'Dateiinhalt';
+      const fileString = `\n\n[${fileLabel}: ${file.name}]\n\`\`\`\n${text}\n\`\`\`\n`;
+      
+      input.value += fileString;
+      autoResize(input);
+      input.focus();
+    };
+    reader.onerror = () => {
+      showError(currentLang === 'en' ? "Error reading file." : "Fehler beim Lesen der Datei.");
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset input
+  }
+
+  // Adds copy buttons to code blocks generated by marked
+  function addCopyButtons(containerElement) {
+    const preBlocks = containerElement.querySelectorAll('pre');
+    preBlocks.forEach(pre => {
+      // Prevent adding multiple buttons if function runs again
+      if(pre.querySelector('.copy-btn')) return; 
+
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.textContent = currentLang === 'en' ? 'Copy' : 'Kopieren';
+      
+      btn.onclick = () => {
+        const codeElement = pre.querySelector('code');
+        if(codeElement) {
+          navigator.clipboard.writeText(codeElement.innerText).then(() => {
+            btn.textContent = currentLang === 'en' ? 'Copied!' : 'Kopiert!';
+            setTimeout(() => {
+              btn.textContent = currentLang === 'en' ? 'Copy' : 'Kopieren';
+            }, 2000);
+          });
+        }
+      };
+      pre.appendChild(btn);
+    });
+  }
+
+  function appendMessage(role, content, isRestoring = false) {
     const empty = document.getElementById('empty-state');
-    if (empty) empty.remove();
+    if (empty) empty.style.display = 'none';
 
     const chat = document.getElementById('chat');
     const div = document.createElement('div');
@@ -491,6 +694,7 @@
     // Parse Markdown for AI responses, keep text for User
     if (role === 'ai') {
       bubble.innerHTML = marked.parse(content);
+      addCopyButtons(bubble); // Inject copy buttons after parsing
     } else {
       bubble.textContent = content;
     }
@@ -499,12 +703,13 @@
     div.appendChild(bubble);
     chat.appendChild(div);
     chat.scrollTop = chat.scrollHeight;
+    
     return bubble;
   }
 
   function showTyping() {
     const empty = document.getElementById('empty-state');
-    if (empty) empty.remove();
+    if (empty) empty.style.display = 'none';
 
     const chat = document.getElementById('chat');
     const div = document.createElement('div');
@@ -545,7 +750,10 @@
     const text = input.value.trim();
 
     if (!text) return;
-    if (!apiKey) { showError('Bitte zuerst den Groq API-Key eingeben.'); return; }
+    if (!apiKey) { 
+      showError(currentLang === 'en' ? 'Please enter your Groq API Key first.' : 'Bitte zuerst den Groq API-Key eingeben.'); 
+      return; 
+    }
     if (isLoading) return;
 
     input.value = '';
@@ -554,7 +762,14 @@
     document.getElementById('sendBtn').disabled = true;
 
     appendMessage('user', text);
+    
+    // Add system prompt if history is empty
+    if(history.length === 0) {
+      history.push({ role: 'system', content: translations[currentLang].sysPrompt });
+    }
+
     history.push({ role: 'user', content: text });
+    saveChatHistory(); // Save immediately after user sends
 
     showTyping();
 
@@ -577,17 +792,21 @@
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error?.message || `API-Fehler ${res.status}`);
+        throw new Error(data.error?.message || `API Error ${res.status}`);
       }
 
       const reply = data.choices[0].message.content;
       removeTyping();
       appendMessage('ai', reply);
       history.push({ role: 'assistant', content: reply });
+      saveChatHistory(); // Save immediately after AI replies
 
     } catch (err) {
       removeTyping();
       showError(err.message);
+      // Remove the last user prompt from history so it doesn't break future context
+      history.pop();
+      saveChatHistory();
     }
 
     isLoading = false;
